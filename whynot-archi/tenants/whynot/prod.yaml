@@ -1,0 +1,66 @@
+# 와이낫 운영. 공개 응답으로 기능만 확인했다 (계정 자격증명 없음 — H-01).
+# units 태그는 개발계에서 검증한 태그를 7단계 MR 로 채운다 (FR-14).
+tenant: whynot
+env: prod
+status: blocked
+blockedReason: >-
+  H-01 - 와이낫 운영 계정(089540175779) 자격증명이 없어 인증서 ARN, 서브넷, Neptune 엔드포인트,
+  버킷 이름을 실측하지 못했다. 기능은 공개 응답으로 확인했다(D-M14). 재개 조건: 운영 Secret 제공 후
+  STS 대조 -> REPLACE-ME 값 실측 -> status: active.
+account: "089540175779"
+region: ap-northeast-2
+cluster: {name: whynot-prod-eks, kubectl: direct}
+namespace: whynot
+scheduling: {nodeSelector: {}, tolerations: []}
+deploy:
+  managedBy: argocd
+  channel: pinned
+  imageSource: hub-ecr              # 개발계 ECR 에서 당긴다 (D-M10, whynot-app 정책 실측)
+  argocdDestination: whynot-prod    # ArgoCD 등록 클러스터 이름 (baseline C.1)
+domain:
+  host: whynot.meta-clouds.com
+  nextHost: next-whynot.meta-clouds.com
+  active: next
+ingress:
+  # prod 는 개발계 그룹을 **공유하지 않는다.** 계정이 다르고(089540175779), 운영 트래픽이
+  # 개발계 ALB 조정에 영향받으면 안 된다. 그래서 대역이 100 이어도 겹칠 상대가 없다.
+  groupName: whynot-prod-platform
+  loadBalancerName: whynot-prod-plat-alb
+  groupOrderBase: 100
+  certificateArn: arn:aws:acm:ap-northeast-2:089540175779:certificate/REPLACE-ME
+  subnets: [subnet-REPLACEME1, subnet-REPLACEME2]
+  idleTimeoutSeconds: 300
+data:
+  neptuneEndpoint: REPLACE-ME
+  neptunePort: 8182
+  bucket: REPLACE-ME
+  videoBucket: null
+  videoOutputRegion: us-west-2
+  s3AllowedPrefixes: ["users/*"]
+identity:
+  serviceAccount: whynot-app
+  manageServiceAccount: false
+  authSecret: whynot-auth
+csp: {mode: report-only}
+roleGate: none
+features: [storyboard, legacy]       # 운영은 videoGen:false, /vpoc.js 404 (보완 S-2)
+projectTypes:
+  - {id: media, displayName: 콘티 프로젝트}
+  - {id: legacy, displayName: 이전 프로젝트}
+units: {}
+flags:
+  legacyWrite: true
+  legacyInputType: false
+branding: {displayName: 와이낫미디어}
+legacy:
+  argocdApp: whynot-prod
+  deployments: [whynot-app, whynot-frontend]
+  services: [whynot-app, whynot-frontend]
+  ingress: whynot
+  alb: whynot-prod-alb
+  configMaps: [whynot-models, whynot-frontend-runtime]
+notes: >-
+  REPLACE-ME 값은 H-01 이 풀린 뒤 실측으로 채운다. status: blocked 라 렌더에서 제외된다.
+  active 로 바꾸면 render --check 가 REPLACE-ME 를 "미치환 값" 으로 잡아 fail-closed 한다.
+  실측 근거: /api/health 200 imageTag ci-aeed17ff, account.expected 089540175779,
+  runtime-config { videoGen:false, storyDev:true }, /vpoc.js 404.

@@ -1,0 +1,200 @@
+# .gitlab-ci.yml (origin/main) 발췌 — 와이낫 잡
+# --- 와이낫미디어 (영상) -------------------------------------------------------
+# 개발계만 있다. 운영계(고객사 EKS)는 deploy:whynot:prod 로 나중에 붙인다.
+check:whynot:
+  stage: check
+  image: python:3.13-slim
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends git nodejs && rm -rf /var/lib/apt/lists/*
+    - python -m pip install --no-cache-dir -r AI-POC-whynot/app/requirements.txt
+  script:
+    # vpoc1(2026-09-23): 구 영상 기능을 제거하면서 검사기 13종도 그 대상 코드와 함께 지웠다.
+    # 남은 검사기는 check_vpoc.py 하나다 — compileall · 임포트 스모크 · node --check ·
+    # 잔존 검사 · 조립기 자체 검사. 정적 검사 통과는 완료 증거가 아니다(PRD R3):
+    # 완료 증거는 dev 브라우저에서 영상이 재생되는 것뿐이다.
+    - python -X utf8 AI-POC-whynot/tools/check_vpoc.py
+    - |
+      before="$CI_COMMIT_BEFORE_SHA"
+      zeros="0000000000000000000000000000000000000000"
+      if [ -z "$before" ] || [ "$before" = "$zeros" ] || ! git cat-file -e "$before^{commit}" 2>/dev/null; then
+        before="$(git rev-parse "$CI_COMMIT_SHA^")"
+      fi
+      git diff --check "$before" "$CI_COMMIT_SHA"
+  rules:
+    # main 에서는 changes 조건 없이 항상 돈다. 이전에는 whynot 파일이 안 바뀐 main 커밋에서
+    # 검증이 통째로 건너뛰어졌다 — 루트 CI 나 플랫폼 파일만 고친 커밋이 무검증으로 지나갔다.
+    - if: $CI_COMMIT_BRANCH == "main"
+    # 브랜치·MR 에서는 whynot 변경이 있을 때만 (R11 의 브랜치 push 게이트).
+    - changes:
+        - "AI-POC-whynot/**/*"
+        - "PLATFORM_FILES.txt"
+
+# ---------------------------------------------------------------------------
+# ECR 불변 태그 방어 (whynot 전용)
+#
+# 같은 커밋 SHA 로 파이프라인이 두 번 돌면 kaniko 가 이미 있는 `ci-<sha>` 를 다시 밀고
+# TAG_INVALID 로 죽는다. 2026-09-18 파이프라인 #204 가 그것이다(같은 sha 재실행).
+# build/deploy 는 이미 main 전용이라 브랜치 때문이 아니고, 재실행·재시도로 언제든 다시 난다.
+#
+# 그래서 빌드 전에 리포지토리별로 태그 존재를 조회해 두고, 있으면 push 를 건너뛴다.
+# 같은 커밋에서 나온 이미지라 건너뛴 것과 다시 만든 것이 같다.
+#
+# 상태 전달은 dotenv 가 아니라 파일 artifact 다. build 잡에 `needs` 를 붙이지 않으려는 것이다 —
+# 공용 저장소에서 `needs` 는 스테이지 대기 관계를 바꾼다. `dependencies` 는 artifact 다운로드
+# 대상만 좁히고 실행 순서를 건드리지 않으므로 build 는 지금처럼 check 스테이지 전체를 기다린다.
+#
+# 파일은 리포 루트 `.whynot-image-state/` 에 둔다. 어느 고객의 kaniko 컨텍스트
+# (`<디렉터리>/app`, `<디렉터리>/frontend`)에도 들어가지 않는 위치다.
+# ---------------------------------------------------------------------------
+probe:whynot:images:
+  stage: check
+  image: python:3.13-alpine
+  script:
+    - apk add --no-cache aws-cli >/dev/null 2>&1 || pip install --quiet awscli
+    - |
+      mkdir -p .whynot-image-state
+      for repo in whynot-app whynot-frontend; do
+        if aws ecr describe-images --region "$AWS_REGION" --repository-name "$repo" \
+             --image-ids imageTag="$IMAGE_TAG" >/dev/null 2>&1; then
+          printf 'exists %s\n' "$IMAGE_TAG" > ".whynot-image-state/$repo"
+          echo "이미 있음 → push 생략 예정: $repo:$IMAGE_TAG"
+        else
+          printf 'missing %s\n' "$IMAGE_TAG" > ".whynot-image-state/$repo"
+          echo "없음 → 빌드 필요: $repo:$IMAGE_TAG"
+        fi
+      done
+  artifacts:
+    paths: [".whynot-image-state/"]
+    expire_in: 1 day
+    when: always
+  rules:
+    # `push` 조건은 사고 재발 방지다 (아래 build:ai-poc:app 주석과 같은 이유).
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"
+      changes: ["AI-POC-whynot/app/**/*", "AI-POC-whynot/frontend/**/*", "AI-POC-whynot/k8s/**/*", "AI-POC-whynot/deploy/**/*"]
+    - if: $FORCE_DEPLOY_TENANT == "whynot"
+
+build:whynot:app:
+  extends: .kaniko-app
+  # artifact 다운로드만 이 잡으로 좁힌다. needs 가 아니므로 스테이지 대기 순서는 그대로다.
+  dependencies: ["probe:whynot:images"]
+  variables:
+    APP_DIR: AI-POC-whynot
+    ECR_REPO: whynot-app
+  # .kaniko-app 의 script 를 덮어쓴다. 공용 템플릿은 다른 고객(ai-poc·keyeast·imaginus)이
+  # 그대로 쓰므로 고치지 않는다 (R13). 아래 kaniko 인수는 .kaniko-app 과 같다.
+  script:
+    - |
+      # 상태 파일이 없거나 태그가 다르면 그냥 빌드한다 — 건너뛰기는 확실할 때만 한다.
+      state=".whynot-image-state/$ECR_REPO"
+      if [ -f "$state" ]; then
+        read -r verdict tag < "$state"
+        if [ "$verdict" = "exists" ] && [ "$tag" = "$IMAGE_TAG" ]; then
+          echo "$ECR_REPO:$IMAGE_TAG 가 ECR 에 이미 있다. 불변 태그라 push 를 건너뛴다."
+          exit 0
+        fi
+        echo "상태 파일 판정: $verdict $tag (현재 태그 $IMAGE_TAG) → 빌드한다."
+      else
+        echo "상태 파일이 없다($state). 안전하게 빌드한다."
+      fi
+    - >-
+      /kaniko/executor
+      --context "$CI_PROJECT_DIR/$APP_DIR/app"
+      --dockerfile "$CI_PROJECT_DIR/$APP_DIR/app/Dockerfile"
+      --destination "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+      --build-arg "IMAGE_TAG=$IMAGE_TAG"
+      --build-arg "SOURCE_STAMP=$CI_COMMIT_SHA"
+      --build-arg "SOURCE_GIT=$CI_COMMIT_REF_NAME@$CI_COMMIT_SHORT_SHA"
+      --label "org.opencontainers.image.revision=$CI_COMMIT_SHA"
+      --label "org.opencontainers.image.version=$IMAGE_TAG"
+      --single-snapshot
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"
+      changes: ["AI-POC-whynot/app/**/*", "AI-POC-whynot/frontend/**/*", "AI-POC-whynot/k8s/**/*", "AI-POC-whynot/deploy/**/*"]
+    - if: $FORCE_DEPLOY_TENANT == "whynot"
+
+build:whynot:frontend:
+  extends: .kaniko-frontend
+  dependencies: ["probe:whynot:images"]
+  variables:
+    APP_DIR: AI-POC-whynot
+    ECR_REPO: whynot-frontend
+  # .kaniko-frontend 의 script 를 덮어쓴다. 아래 kaniko 인수는 템플릿과 같다.
+  script:
+    - |
+      state=".whynot-image-state/$ECR_REPO"
+      if [ -f "$state" ]; then
+        read -r verdict tag < "$state"
+        if [ "$verdict" = "exists" ] && [ "$tag" = "$IMAGE_TAG" ]; then
+          echo "$ECR_REPO:$IMAGE_TAG 가 ECR 에 이미 있다. 불변 태그라 push 를 건너뛴다."
+          exit 0
+        fi
+        echo "상태 파일 판정: $verdict $tag (현재 태그 $IMAGE_TAG) → 빌드한다."
+      else
+        echo "상태 파일이 없다($state). 안전하게 빌드한다."
+      fi
+    - >-
+      /kaniko/executor
+      --context "$CI_PROJECT_DIR/$APP_DIR/frontend"
+      --dockerfile "$CI_PROJECT_DIR/$APP_DIR/frontend/Dockerfile"
+      --destination "$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+      --build-arg "ASSET_VERSION=$IMAGE_TAG"
+      --label "org.opencontainers.image.revision=$CI_COMMIT_SHA"
+      --label "org.opencontainers.image.version=$IMAGE_TAG"
+      --single-snapshot
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"
+      changes: ["AI-POC-whynot/app/**/*", "AI-POC-whynot/frontend/**/*", "AI-POC-whynot/k8s/**/*", "AI-POC-whynot/deploy/**/*"]
+    - if: $FORCE_DEPLOY_TENANT == "whynot"
+
+deploy:whynot:dev:
+  extends: .deploy-app
+  needs: ["check:whynot", "build:whynot:app", "build:whynot:frontend"]
+  variables:
+    APP_DIR: AI-POC-whynot
+    DEPLOY_PATH: whynot/dev
+    # 오버레이 없음 — config.env.example 하나에 개발계 값이 다 있다.
+    RENDER_TARGET: ""
+    ARGO_APP: whynot-dev
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"
+      changes: ["AI-POC-whynot/app/**/*", "AI-POC-whynot/frontend/**/*", "AI-POC-whynot/k8s/**/*", "AI-POC-whynot/deploy/**/*"]
+    - if: $FORCE_DEPLOY_TENANT == "whynot"
+
+deploy:whynot:prod:
+  extends: .deploy-app
+  # 수동 버튼. 개발계에서 확인한 커밋의 파이프라인에서 ▶ 를 누른다.
+  # 이미지를 다시 빌드하지 않고 그 커밋의 ci-<sha> 를 그대로 승격한다.
+  when: manual
+  # needs 를 비워 두면 빌드 잡의 완료를 기다리지 않고 바로 누를 수 있다.
+  # 대신 아래 before_script 가 그 태그가 ECR 에 실제로 있는지 확인한다.
+  needs: []
+  variables:
+    APP_DIR: AI-POC-whynot
+    DEPLOY_PATH: whynot/prod
+    RENDER_TARGET: "--target prod"
+    ARGO_APP: whynot-prod
+  before_script:
+    - |
+      # 개발계 빌드를 건너뛴 커밋을 운영에 올리면 ImagePullBackOff 가 된다.
+      # 승격 전에 두 이미지가 ECR 에 있는지 확인한다(Runner 의 Pod Identity 로 조회 가능).
+      apk add --no-cache aws-cli >/dev/null 2>&1 || pip install --quiet awscli
+      for repo in whynot-app whynot-frontend; do
+        aws ecr describe-images --region "$AWS_REGION" --repository-name "$repo" --image-ids imageTag="$IMAGE_TAG" >/dev/null 2>&1 \
+          || { echo "ECR 에 $repo:$IMAGE_TAG 가 없다. 이 커밋의 개발계 빌드를 먼저 통과시킨다."; exit 1; }
+        echo "확인: $repo:$IMAGE_TAG"
+      done
+  environment:
+    name: whynot-prod
+    url: https://whynot.meta-clouds.com
+  rules:
+    # 개발계 잡과 같은 조건이다. 예전에는 changes 가 없어 **모든 main 커밋**에 승격 버튼이 떴다.
+    # 문서만 고친 커밋에도 수동 잡이 남아 파이프라인이 "아직 안 끝난 것"처럼 보였다.
+    # 승격 유연성은 그대로다 — 원하는 커밋의 파이프라인으로 가서 누르면 되고,
+    # 그 커밋은 whynot 변경이라 버튼이 있다. 롤백은 ai-deploy 의 whynot/prod 를 revert 한다.
+    #
+    # **운영계라 `FORCE_DEPLOY_TENANT` 문을 두지 않는다.** 이 잡은 `when: manual` 이므로
+    # 버튼이 떠도 사람이 눌러야 하지만, 수동 파이프라인에서 운영 버튼이 떠 있는 것 자체가
+    # 오조작의 표면이다. 승격은 push 파이프라인에서만 한다.
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"
+      changes: ["AI-POC-whynot/app/**/*", "AI-POC-whynot/frontend/**/*", "AI-POC-whynot/k8s/**/*", "AI-POC-whynot/deploy/**/*"]
+

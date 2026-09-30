@@ -1,0 +1,64 @@
+# 와이낫 개발계. 기능은 1단계 보완 S-2 실측 그대로다 (story-chapter 는 켜지 않는다 — D-M14).
+tenant: whynot
+env: dev
+status: active
+account: "730335451955"
+profile: ai-poc-hub
+region: ap-northeast-2
+cluster: {name: AI-POC-eks, kubectl: bastion}
+namespace: whynot
+scheduling: {nodeSelector: {}, tolerations: []}
+deploy:
+  managedBy: argocd
+  channel: auto
+  imageSource: hub-ecr
+  argocdDestination: in-cluster
+domain:
+  host: dev-whynot.meta-clouds.com
+  nextHost: next-dev-whynot.meta-clouds.com
+  active: next
+ingress:
+  groupName: platform-dev              # 개발계 공용 그룹 (B1 / D-T02)
+  loadBalancerName: platform-dev-alb
+  groupOrderBase: 400
+  certificateArn: arn:aws:acm:ap-northeast-2:730335451955:certificate/9fd7fdac-7ed2-45e4-a810-6399803da5e4
+  subnets: [subnet-0b8b4832085705b56, subnet-07db8faf09bcfcdbb, subnet-053f2f798359b197a]
+  idleTimeoutSeconds: 300
+data:
+  neptuneEndpoint: whynot-graph.cluster-cd0q2kk4wlbo.ap-northeast-2.neptune.amazonaws.com
+  neptunePort: 8182
+  bucket: whynot-730335451955
+  videoBucket: whynot-video-730335451955-us-west-2
+  videoOutputRegion: us-west-2
+  s3AllowedPrefixes: ["users/*", "_config/models.json", "_config/prompts.json"]
+identity:
+  serviceAccount: whynot-app
+  manageServiceAccount: false
+  authSecret: whynot-auth
+  roleArn: arn:aws:iam::730335451955:role/whynot-app-role
+csp: {mode: report-only}
+roleGate: none                      # http_guards / ROLE_BETA 가 없다 (baseline B.4)
+features: [storyboard, video-scene, legacy]
+projectTypes:
+  - {id: media}
+  - {id: legacy, displayName: 이전 프로젝트}
+flags:
+  legacyWrite: true                 # 와이낫은 레거시 경로로 원문을 넣고 분석한다 (P-21)
+  legacyInputType: false
+  smoke: true                       # 개발계 VPOC_SMOKE_ENABLED=true 실측
+  regen: true
+  rawErrors: false
+branding: {displayName: 와이낫미디어}
+legacy:
+  argocdApp: whynot-dev
+  deployments: [whynot-app, whynot-frontend, whynot-video-worker]
+  services: [whynot-app, whynot-frontend]
+  ingress: whynot
+  alb: whynot-web-alb
+  configMaps: [whynot-models, whynot-frontend-runtime]
+notes: >-
+  dev-whynot.meta-clouds.com 은 ns whynot 의 whynot-web-alb 를 가리킨다.
+  dev-whynot 네임스페이스는 존재하지 않는다 (baseline 근거 문서와 다른 점 2).
+  6단계 전환 전에 D-M13 을 확인해야 한다: 현재 떠 있는 이미지가 ci-75578ed3 = main HEAD 다.
+  S3_VIDEO_BUCKET / whynot-730335451955 값은 레거시 config.env.example 기준이며
+  실물 버킷 확인은 3단계 렌더 전에 한 번 더 한다 (1단계에서 버킷 목록을 조회하지 않았다).
