@@ -28,23 +28,19 @@
 
 ## 현재 상태 (2026-09-30)
 
-- vpoc2 코드 v1: `AI-POC-whynot/app/src/vpoc2/` · `frontend/public/vpoc2.*` (이 저장소 = GitLab 브랜치와 동일)
-- 목 모드 검증: `tests/` 6건 · 브라우저 ①~⑤ · 합본 15.00초
-- GitLab `awstech/ai` 브랜치 `whynot/vpoc2` (커밋 `9112fc0`) → **MR !208**, 브랜치 파이프라인 #820 **success**
-  (check:whynot · check:platform · check:platform:module · check:platform:frontend)
-- 로컬 검증: check_vpoc.py 전부 통과 · `/api/vpoc2` 라우트 12개 등록 · render dev/prod 미해결 변수 0
-- **main 병합은 세션 권한 검사에 막혀 하지 못했다** → 설계자가 GitLab 에서 [Merge] 또는 권한 허용
-- 실제 AWS 호출(모델 · S3 쓰기) 사전 점검도 권한 검사에 막혀 하지 못했다 → dev 에서 처음 확인된다
-- dev 현재: `ci-def69090`, `/api/vpoc2/meta` 404 (미배포). 운영 `ci-aeed17ff`, videoGen:false
+- **vpoc2 dev 배포 완료.** MR !208 병합(설계자) → main `0e07c2e9` → 파이프라인 #822 success → dev imageTag `ci-0e07c2e9` (병합 후 약 2분 반)
+- dev 확인: `/api/vpoc2/meta` · `/api/vpoc2/runs` 401(등록됨, 인증 먼저) · vpoc1 `/api/vpoc/p/x` 401 그대로 · `vpoc2.js` 배포본 = 이 저장소 파일 · 브라우저 로드 오류 0
+- 운영(`whynot`)은 변경 없음 (`VPOC2_ENABLED=false`, `videoGen:false`)
+- 실제 AWS 모델 호출은 아직 한 번도 안 됐다 — 설계자 첫 테스트가 첫 호출이다
+- 이 저장소 코드 = GitLab main 의 `AI-POC-whynot/app/src/vpoc2/` · `frontend/public/vpoc2.*`
 
 ## 대기 중
 
 | # | 항목 | 누가 |
 |---|---|---|
-| 1 | MR !208 병합 (https://gitlab.meta-clouds.com/awstech/ai/-/merge_requests/208) | 설계자 |
-| 2 | 병합 후 main 파이프라인 · `/api/health` imageTag · `/api/vpoc2/meta` 401 확인 | Claude |
-| 3 | dev 에서 실제 테스트 → 리뷰 | 설계자 |
+| 1 | dev 테스트: 메인에서 로그인한 **같은 탭**에서 `https://dev-whynot.meta-clouds.com/vpoc2.html` → ①~⑤ → 리뷰 | 설계자 |
+| 2 | 오류가 나면 화면의 오류 원문(where · type · message · requestId) 전달 | 설계자 |
 
 ## 다음 단계
 
-병합되면 main 파이프라인(build → deploy:whynot:dev)을 보고, dev `/api/health` 의 imageTag 가 새 `ci-<sha8>` 인지, `/api/vpoc2/meta` 가 401 인지 확인한다. 이후 설계자 테스트 결과를 받아 수정한다.
+테스트 결과로 수정한다. 수정은 이 저장소에서 하고 GitLab 브랜치 → MR → (설계자 병합) → dev. vpoc2.js · css 를 바꾸면 vpoc2.html 의 `?v=` 를 올린다.
