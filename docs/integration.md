@@ -26,30 +26,20 @@ app.register_blueprint(vpoc2.create_blueprint(vpoc2.Vpoc2Dependencies(
 
 `require_auth` 는 핸들러를 감싸는 기존 데코레이터, 사용자 id 는 `g.username` 이다 (vpoc1 review 2-c).
 
-## 3. 설정 키
+## 3. 설정 키 (2026-09-30 실제 적용 — MR !208)
 
-`deploy/config.env.example` (dev):
+키는 **`VPOC2_ENABLED` 하나**다. 버킷은 앱에 이미 있는 값을 그대로 쓴다: 주 버킷 `S3_BUCKET`, 영상 버킷 `VPOC_VIDEO_BUCKET`.
 
-```
-VPOC2_ENABLED=true
-VPOC2_MOCK=false
-VPOC2_RAW_ERRORS=true
-VPOC2_MAIN_BUCKET=whynot-730335451955
-VPOC2_MAIN_REGION=ap-northeast-2
-VPOC2_VIDEO_BUCKET=whynot-video-730335451955-us-west-2
-VPOC2_HQ_MONTHLY_LIMIT=1
-```
+| 파일 | 추가 |
+|---|---|
+| `deploy/config.env.example` | `VPOC2_ENABLED=true` |
+| `deploy/config.prod.env` | `VPOC2_ENABLED=false` |
+| `k8s/workloads.yaml.tmpl` (`whynot-app` env) | `- name: VPOC2_ENABLED` / `value: "${VPOC2_ENABLED}"` |
 
-`deploy/config.prod.env` (운영 오버레이 — 운영에서는 끈다):
+등록 조건은 vpoc1 과 같이 `VIDEO_GEN_ENABLED and vpoc2.settings.ENABLED` 다 (운영은 `VIDEO_GEN_ENABLED=false` 라 두 겹으로 꺼진다).
+`server.py` 는 `from . import (...)` 목록에 `vpoc2,` 를 넣고, vpoc1 등록 블록 바로 아래에 등록한다.
 
-```
-VPOC2_ENABLED=false
-VPOC2_RAW_ERRORS=false
-VPOC2_VIDEO_BUCKET=
-```
-
-`k8s/workloads.yaml.tmpl` 의 `whynot-app` 컨테이너 env 에 같은 7개 키를 `${VAR}` 로 넣는다. **템플릿에 쓴 `${VAR}` 가 `config.env.example` 에 없으면 `deploy:whynot:dev` 가 실패한다** (`AI-POC-whynot/CLAUDE.md`).
-모델 ID 는 코드 기본값(PRD 5.0 실측값)을 쓴다. 바꿀 때만 `VPOC2_TEXT_MODEL` · `VPOC2_IMAGE_MODEL` · `VPOC2_VIDEO_MODEL` 을 추가한다.
+`vpoc2.html` 은 `vpoc2.js?v=…` · `vpoc2.css?v=…` 로 부른다. nginx 가 .js · .css 를 30일 immutable 로 캐시하므로 **두 파일을 바꾸면 html 의 버전을 올린다.**
 
 ## 4. 권한 · 네트워크 — 새로 바꿀 것 없음 (확인만)
 

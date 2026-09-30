@@ -29,7 +29,8 @@ RAW_ERRORS = _bool("VPOC2_RAW_ERRORS", True)
 # 저장소. 목 모드에서 LOCAL_DIR 이 있으면 S3 대신 로컬 폴더를 쓴다.
 MAIN_BUCKET = os.getenv("VPOC2_MAIN_BUCKET") or os.getenv("S3_BUCKET", "")
 MAIN_REGION = os.getenv("VPOC2_MAIN_REGION") or os.getenv("AWS_REGION", "ap-northeast-2")
-VIDEO_BUCKET = os.getenv("VPOC2_VIDEO_BUCKET", "")
+# 영상 버킷은 vpoc1 과 같은 버킷(VPOC_VIDEO_BUCKET)을 쓴다. 접두사가 달라 섞이지 않는다.
+VIDEO_BUCKET = os.getenv("VPOC2_VIDEO_BUCKET") or os.getenv("VPOC_VIDEO_BUCKET", "")
 LOCAL_DIR = os.getenv("VPOC2_LOCAL_DIR", "")
 
 # 모델 (PRD 5.0 실측값. 조용히 바꾸지 않는다)

@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import threading
 from typing import Any
 
@@ -37,12 +38,18 @@ class MaybeMissing(Exception):
         self.error = error
 
 
+def safe_owner(owner: str) -> str:
+    """server.safe_user_prefix 와 같은 규칙. 사용자 이름(이메일 등)을 S3 키에 그대로 넣지 않는다."""
+    normalized = re.sub(r"[^a-zA-Z0-9_-]", "-", owner).strip("-")
+    return normalized or "user"
+
+
 def run_prefix(owner: str, run_id: str) -> str:
-    return f"users/{owner}/video/_vpoc2/{run_id}"
+    return f"users/{safe_owner(owner)}/video/_vpoc2/{run_id}"
 
 
 def index_key(owner: str) -> str:
-    return f"users/{owner}/video/_vpoc2/index.json"
+    return f"users/{safe_owner(owner)}/video/_vpoc2/index.json"
 
 
 LEDGER_KEY = "users/_vpoc2/ledger.json"
