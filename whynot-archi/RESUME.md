@@ -19,26 +19,19 @@
 
 와이낫 영상(Luma Ray2 via Bedrock)의 품질 개선. 첫 과제는 사용자의 짧은 문장을 영상용 세부 프롬프트로 바꾸는 **연출 단계** 추가 (계획서 2장).
 
-## 결정된 것 (2026-09-30)
+## 방향 전환 (2026-09-30)
 
-| 항목 | 결정 |
-|---|---|
-| 테스트 해상도 | 540p 고정 (설계자 지시는 480p 였으나 Bedrock Luma Ray2 는 540p · 720p 만 지원 — 설계자 확인 대기) |
-| 720p | 월 1회 최종 결과 확인용만. 서버가 강제 |
-| 실험 예산 | 승인 (540p 약 86.5 USD + 720p 월 최대 45 USD) |
+기존 vpoc1 코드를 받지 않고 **이 저장소에서 새로 만든다(vibe 코딩).** 정본 명세는 **`docs/spec-v1.md`**.
+`whynot-archi/plans/prompt-quality-plan.md` 는 연출 단계 설계(2장)만 참고로 쓴다 — 실험 · 시험 세트 · 코드 zip 부분은 폐기.
+
+핵심: 명령 → AI 해석(명령 요소 체크리스트) → 캐릭터 이미지 확정 → 15초(5초 × 3샷) 540p 영상 → 사용자 리뷰(점수 · 요소별 반영 · 좋은 점 · 아쉬운 점).
 
 ## 대기 중
 
 | # | 항목 | 누가 |
 |---|---|---|
-| 1 | 코드 zip (`AI-POC-whynot/app/src/vpoc/` 등 — 목록은 계획서 대화 기록 / 아래) + 기준 커밋 sha | 설계자 |
-| 2 | 현재 결과 샘플: 완료 계획 1~2개의 `state.json` · `jobs/*.json` · `final.json` + MP4 2~3개 (영상은 약 2주 뒤 만료) | 설계자 |
-| 3 | 품질 비교 대상과 가장 큰 증상 (흐림 · 움직임 · 지시 불이행 · 얼굴) | 설계자 |
-| 4 | 샷 첫 장면 이미지(L3) 확대 승인 여부 | 설계자 |
-| 5 | 480p → 540p 대체 확인 | 설계자 |
-
-코드 zip 목록: `app/src/vpoc/` 전체 · `frontend/public/vpoc.js` · `vpoc.css` · `tools/check_vpoc.py` · `tools/vpoc_e2e.py` · `deploy/config.env.example` · `deploy/config.prod.env` · `k8s/workloads.yaml.tmpl` · `app/requirements.txt` · `docs/vpoc1/` · `docs/구조분석.md` (모두 `AI-POC-whynot/` 아래, `git archive origin/main` 로 묶는다).
+| 1 | 실행 위치 · 저장 위치 · 로그인 (`docs/spec-v1.md` 7장 Q1~Q3) | 설계자 |
 
 ## 다음 단계
 
-zip 이 오면 계획서 S0(코드 확인 → 계획 v3) → S2(연출 단계 구현, 스위치 `VPOC_DIRECTOR_ENABLED`) 순서. 코드 결과물은 이 저장소에 패치로 올리고, 적용 · 배포 · 실측은 GitLab 쪽 로컬 세션이 한다.
+Q1~Q3 답을 받으면 `docs/spec-v1.md` 6장 조각 K0 부터 만든다. 각 조각은 목 모드로 이 세션에서 확인하고, 실제 AWS 호출 테스트는 설계자가 한다.
