@@ -97,6 +97,7 @@ def check_interpretation(interp: dict[str, Any]) -> list[str]:
     char_ids = {c.get("id") for c in chars}
     for c in chars:
         v += [f"{c.get('id')}.{x}" for x in check_text("handleEn", c.get("handleEn", ""), chars)]
+        v += [f"{c.get('id')}.{x}" for x in check_must_keep(c.get("appearanceEn", ""), c)]
         h = (c.get("handleEn") or "").strip().lower()
         if h in handles:
             v.append(f"{c.get('id')}.handleEn: 다른 캐릭터와 지칭이 같다")
@@ -158,9 +159,34 @@ def check_prompt(prompt: str, characters: list[dict[str, Any]]) -> list[str]:
     return v
 
 
-def character_image_prompt(style: str, appearance_en: str, setting_en: str) -> tuple[str, str]:
-    prompt = (f"{STYLE_IMAGE.get(style, STYLE_IMAGE['live_action'])}. Waist-up portrait of "
-              f"{appearance_en.strip().rstrip('.')}, standing in {setting_en.strip().rstrip('.')}, "
-              f"facing the camera, calm expression, sharp focus on the face.")
-    negative = "text, watermark, logo, extra people, extra fingers, deformed hands, blurry face, cropped head"
+def check_must_keep(text: str, character: dict[str, Any]) -> list[str]:
+    """사용자가 직접 쓴 외형 특징(mustKeepEn)이 문장에 그대로 들어 있는지 본다 (명령 반영의 최소 조건)."""
+    low = (text or "").lower()
+    missing = [t for t in (character.get("mustKeepEn") or []) if t and t.strip().lower() not in low]
+    if missing:
+        return [f"appearance: 사용자가 쓴 특징 {missing} 이 외형 문장에 없다"]
+    return []
+
+
+def character_image_prompt(style: str, character: dict[str, Any], setting_en: str,
+                           note_en: str = "") -> tuple[str, str]:
+    """캐릭터 이미지 프롬프트. 사용자가 쓴 특징을 맨 앞에 둔다 (SD3.5 는 앞쪽 단어를 강하게 따른다).
+    사람이 아니면 사람용 틀(허리 위 · 표정 · 손가락)을 쓰지 않는다."""
+    kind = character.get("kind") or "human"
+    appearance = (character.get("appearanceEn") or "").strip().rstrip(".")
+    must = ", ".join(t.strip() for t in (character.get("mustKeepEn") or []) if t.strip())
+    species = (character.get("speciesEn") or "").strip()
+    setting = setting_en.strip().rstrip(".")
+    style_text = STYLE_IMAGE.get(style, STYLE_IMAGE["live_action"])
+    note = f" {note_en.strip().rstrip('.')}." if note_en else ""
+    if kind == "human":
+        prompt = (f"{style_text}. Waist-up portrait of {appearance}, standing in {setting}, "
+                  f"facing the camera, calm expression, sharp focus on the face.{note}")
+        negative = "text, watermark, logo, extra people, extra fingers, deformed hands, blurry face, cropped head"
+    else:
+        lead = f"{must} {species}".strip() if must else species
+        prompt = (f"{style_text}. Full-body portrait of a single {lead}: {appearance}. "
+                  f"The whole body is visible, sitting in {setting}, looking at the camera, "
+                  f"sharp focus on the face and fur texture.{note}")
+        negative = "text, watermark, logo, people, humans, extra animals, extra legs, deformed paws, blurry, cropped body"
     return prompt, negative

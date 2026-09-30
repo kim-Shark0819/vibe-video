@@ -179,3 +179,47 @@ def test_access_denied_on_missing_key_creates_default(tmp_path):
     with pytest.raises(Vpoc2Error) as exc:
         store.get_json(s, "users/dev/video/_vpoc2/rX/run.json")
     assert exc.value.type == "AccessDenied"
+
+
+def test_animal_character_image_prompt_keeps_user_traits():
+    """'털이 짧고 까만 고양이' → 이미지 프롬프트가 사용자 특징으로 시작하고 사람용 틀을 쓰지 않는다."""
+    from vpoc2 import compose
+
+    cat = {"id": "c1", "nameKo": "고양이 1", "kind": "animal", "speciesEn": "cat",
+           "mustKeepEn": ["black", "short fur"],
+           "appearanceEn": "A black cat with short fur, sleek glossy coat, slim build and bright amber eyes",
+           "handleEn": "the black cat"}
+    prompt, negative = compose.character_image_prompt("live_action", cat, "A cozy apartment windowsill at dusk")
+    body = prompt.split(". ", 1)[1]
+    assert body.startswith("Full-body portrait of a single black, short fur cat")
+    assert "Waist-up" not in prompt and "fingers" not in negative
+    assert compose.check_must_keep(cat["appearanceEn"], cat) == []
+    tabby = dict(cat, appearanceEn="A tabby cat with striped orange and white fur")
+    assert compose.check_must_keep(tabby["appearanceEn"], tabby)  # 사용자가 쓴 'black' · 'short fur' 누락 → 위반
+
+
+def test_redraw_feedback_is_translated_not_pasted(client, monkeypatch):
+    """다시 그리기 의견(한국어)은 SD3.5 프롬프트에 그대로 들어가지 않고 revise_character 를 거친다."""
+    import time as _t
+
+    from vpoc2 import mock
+
+    seen = {}
+
+    def fake_revise(character, feedback):
+        seen["feedback"] = feedback
+        return dict(character, appearanceEn="A person with long silver hair in a navy coat", mustKeepEn=["long silver hair"]), 0.0
+
+    prompts = []
+    real_generate = mock.generate
+    monkeypatch.setattr(mock, "revise_character", fake_revise)
+    monkeypatch.setattr(mock, "generate", lambda p, n: (prompts.append(p), real_generate(p, n))[1])
+    c = client
+    run_id = c.post("/api/vpoc2/runs", json={"command": "여자가 웃는다"}).get_json()["run"]["id"]
+    c.post(f"/api/vpoc2/runs/{run_id}/run/interpret"); wait_task(c, run_id)
+    c.post(f"/api/vpoc2/runs/{run_id}/run/draw", json={}); wait_task(c, run_id)
+    c.post(f"/api/vpoc2/runs/{run_id}/run/draw", json={"charId": "c1", "feedbackKo": "머리를 은색으로 길게"})
+    run = wait_task(c, run_id)
+    assert seen["feedback"] == "머리를 은색으로 길게"
+    assert "은색" not in prompts[-1] and "long silver hair" in prompts[-1]
+    assert run["interpretation"]["data"]["characters"][0]["appearanceEn"].startswith("A person with long silver hair")

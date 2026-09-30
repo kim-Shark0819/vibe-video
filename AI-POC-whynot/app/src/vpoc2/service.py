@@ -237,9 +237,11 @@ def save_interpretation(owner: str, run_id: str, data: dict[str, Any]) -> None:
         if run["interpretation"]["status"] == "empty":
             raise Vpoc2Error("PreconditionFailed", "해석이 아직 없다", http=409)
         old = run["interpretation"]["data"] or {}
-        chars_changed = [
-            (c.get("id"), c.get("appearanceEn"), c.get("handleEn")) for c in old.get("characters", [])
-        ] != [(c.get("id"), c.get("appearanceEn"), c.get("handleEn")) for c in data.get("characters", [])]
+        def looks(chars: list[dict[str, Any]]) -> list[tuple]:
+            return [(c.get("id"), c.get("kind"), c.get("speciesEn"), c.get("mustKeepEn"), c.get("appearanceEn"),
+                     c.get("handleEn")) for c in chars]
+
+        chars_changed = looks(old.get("characters", [])) != looks(data.get("characters", []))
         _cancel_task(run)
         run["interpretation"]["data"] = data
         run["interpretation"]["violations"] = compose.check_interpretation(data)
@@ -257,7 +259,7 @@ def save_interpretation(owner: str, run_id: str, data: dict[str, Any]) -> None:
 
 def run_draw(owner: str, run_id: str, char_id: str | None, feedback: str = "") -> None:
     """char_id 가 없으면 아직 이미지가 없는 캐릭터 전부를 그린다."""
-    _llm, images, _video = providers()
+    llm, images, _video = providers()
     feedback = (feedback or "").strip()[:300]
 
     def precheck(run: dict[str, Any]) -> None:
@@ -276,12 +278,18 @@ def run_draw(owner: str, run_id: str, char_id: str | None, feedback: str = "") -
         targets = [it for it in snap["characters"]["items"]
                    if (it["id"] == char_id) or (char_id is None and (not it.get("image") or snap["characters"]["status"] == "stale"))]
         results = {}
+        revised: dict[str, dict[str, Any]] = {}
         for it in targets:
             c = by_id[it["id"]]
-            appearance = c.get("appearanceEn", "")
             if feedback and it["id"] == char_id:
-                appearance = f"{appearance.rstrip('.')}. Adjusted per note: {feedback}"
-            prompt, negative = compose.character_image_prompt(data.get("style", "live_action"), appearance,
+                # 한국어 의견을 SD3.5 프롬프트에 그대로 넣지 않는다 (모델이 한국어를 거의 못 읽는다).
+                # Claude 가 캐릭터의 영어 외형을 의견대로 고친다 → 영상 프롬프트에도 같이 반영된다.
+                c, usd_text = llm.revise_character(c, feedback)
+                revised[c["id"]] = c
+                if usd_text:
+                    ledger.charge(f"revise-{run_id}-{it['id']}-{secrets.token_hex(3)}", user=owner, run_id=run_id,
+                                  kind="text", model=settings.TEXT_MODEL, units=1, usd=usd_text)
+            prompt, negative = compose.character_image_prompt(data.get("style", "live_action"), c,
                                                              data.get("settingEn", ""))
             jpeg, seed, calls = images.generate(prompt, negative)
             n = len(it.get("history") or []) + 1
@@ -295,6 +303,10 @@ def run_draw(owner: str, run_id: str, char_id: str | None, feedback: str = "") -
                                  "feedbackKo": feedback if it["id"] == char_id else ""}
 
         def apply(run: dict[str, Any]) -> None:
+            chars = (run["interpretation"]["data"] or {}).get("characters", [])
+            for i, c in enumerate(chars):
+                if c.get("id") in revised:
+                    chars[i] = revised[c["id"]]
             for it in run["characters"]["items"]:
                 if it["id"] in results:
                     it["image"] = results[it["id"]]

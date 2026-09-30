@@ -250,7 +250,11 @@
     if (!d.characters.length) html += '<p class="vpoc2-muted">등장 캐릭터가 없습니다. 캐릭터 단계를 건너뜁니다.</p>';
     html += '<div class="vpoc2-grid">';
     d.characters.forEach(function (c, i) {
-      html += '<div class="vpoc2-shot"><b>' + esc(c.id) + "</b>" + field("이름", "characters." + i + ".nameKo", c.nameKo) +
+      var must = (c.mustKeepEn || []).map(function (t) { return '<span class="vpoc2-chip el">' + esc(t) + "</span>"; }).join("");
+      html += '<div class="vpoc2-shot"><b>' + esc(c.id) + "</b> " + '<span class="vpoc2-badge">' +
+        esc({ human: "사람", animal: "동물", creature: "생물" }[c.kind] || c.kind || "") + (c.speciesEn ? " · " + esc(c.speciesEn) : "") +
+        "</span>" + (must ? '<div class="vpoc2-muted" style="margin-top:6px">사용자가 쓴 특징 (이미지·영상에 반드시 넣음)</div>' + must : "") +
+        field("이름", "characters." + i + ".nameKo", c.nameKo) +
         field("역할", "characters." + i + ".roleKo", c.roleKo) + field("외형", "characters." + i + ".appearanceKo", c.appearanceKo, true) +
         "<details><summary class=\"vpoc2-muted\">영어 (고급)</summary>" +
         field("외형 (영어)", "characters." + i + ".appearanceEn", c.appearanceEn, true) +

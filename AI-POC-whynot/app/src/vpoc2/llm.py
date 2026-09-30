@@ -22,11 +22,22 @@ Work in this order:
    time/weather, action, change of emotion or state, relationship, mood, camera wish, style wish).
    Each element is one short Korean phrase. Keep the user's own words. Do not invent elements the user
    did not ask for. ids: e1, e2, ...
-2. characters: at most 2 people/creatures that appear. Keep every fact the user wrote (names,
-   appearance, clothes, relationship) unchanged; fill only what is missing. If no name is given, do not
-   invent one: use a display name like "여자 1" for nameKo and an empty string for nameEn.
-   appearanceEn: hair, face impression, clothes, one signature item, in plain English, 25-40 words.
-   handleEn: a short unique way to refer to the character in shot text (e.g. "the woman with the red umbrella").
+2. characters: at most 2 people, animals or creatures that appear. Keep every fact the user wrote
+   (species, names, colors, fur/hair length, patterns, clothes, relationship) unchanged; fill only what
+   is missing. If no name is given, do not invent one: use a display name like "여자 1" or "고양이 1" for
+   nameKo and an empty string for nameEn.
+   kind: "human", "animal" or "creature".
+   speciesEn: what it is in one or two words ("woman", "cat", "golden retriever", "dragon").
+   mustKeepEn: every visual trait the USER explicitly wrote about this character, translated literally
+   into short English phrases (e.g. user "털이 짧고 까만 고양이" -> ["black", "short fur", "cat"]).
+   Empty list only if the user wrote no visual trait. Never add traits the user did not write here.
+   appearanceEn: 25-40 words of plain English that START with the mustKeepEn traits and the species
+   (e.g. "A black short-haired cat with ..."), then fill the rest.
+     human: hair, face impression, clothes, one signature item.
+     animal/creature: fur/feather/skin color and pattern, fur length, body size and build, eye color,
+     one signature detail. Use single solid colors exactly as the user wrote them; describe a black
+     animal as black all over.
+   handleEn: a short unique way to refer to the character in shot text (e.g. "the black cat").
 3. look: ONE visual look shared by all shots (color palette, light quality, lens/texture, mood),
    derived from the command. lookEn max 160 chars.
 4. setting: ONE location and time for the whole scene. All shots happen inside it.
@@ -79,8 +90,13 @@ EMIT_INTERPRETATION = {
                 "properties": {"id": _STR, "kind": _s("who|object|place|time|action|change|relation|mood|camera|style|other"),
                                "textKo": _s("short Korean phrase from the command")}}},
             "characters": {"type": "array", "maxItems": 2, "items": {
-                "type": "object", "required": ["id", "nameKo", "roleKo", "appearanceKo", "appearanceEn", "handleEn"],
+                "type": "object", "required": ["id", "nameKo", "kind", "speciesEn", "mustKeepEn", "roleKo", "appearanceKo",
+                             "appearanceEn", "handleEn"],
                 "properties": {"id": _s("c1, c2"), "nameKo": _STR, "nameEn": _s("English name, or empty string if the user gave none"),
+                               "kind": {"type": "string", "enum": ["human", "animal", "creature"]},
+                               "speciesEn": _s("one or two words, e.g. woman, cat"),
+                               "mustKeepEn": {"type": "array", "items": _STR,
+                                              "description": "visual traits the user explicitly wrote, literal English"},
                                "roleKo": _STR, "appearanceKo": _STR,
                                "appearanceEn": _s("25-40 words, no names"),
                                "handleEn": _s("max 60 chars, unique")}}},
@@ -100,10 +116,13 @@ EMIT_INTERPRETATION = {
 }
 
 APPEARANCE_SYSTEM = """You write the fixed English appearance line for a character in a text-to-video prompt.
-Look at the confirmed character image and the character sheet. Describe what is visible: hair (color, length,
-style), face impression, clothes and colors, one signature item. 12-20 words, max 120 characters.
-Plain English, no names, no negation words, no brand names. The same line will be repeated in every shot.
-If the image and the sheet disagree, trust the image (the user confirmed it).
+Look at the confirmed character image and the character sheet. Start with the species/person and the
+must-keep traits from the sheet, then what is visible.
+  human: hair (color, length, style), face impression, clothes and colors, one signature item.
+  animal/creature: fur/feather/skin color and pattern, fur length, build, eye color, one signature detail.
+12-20 words, max 120 characters. Plain English, no names, no negation words, no brand names.
+The same line will be repeated in every shot. If the image and the sheet disagree, trust the image
+(the user confirmed it), but keep every must-keep trait word.
 Always answer by calling the tool emit_appearance."""
 
 EMIT_APPEARANCE = {
@@ -201,21 +220,63 @@ def interpret(command: str, user_characters: list[dict[str, Any]]) -> tuple[dict
 
 
 def appearance_from_image(image_jpeg: bytes, character: dict[str, Any]) -> tuple[str, float, list[str]]:
-    sheet = (f"character sheet: role={character.get('roleKo')}; appearanceKo={character.get('appearanceKo')}; "
-             f"appearanceEn={character.get('appearanceEn')}")
+    sheet = (f"character sheet: kind={character.get('kind')}; species={character.get('speciesEn')}; "
+             f"mustKeep={character.get('mustKeepEn')}; role={character.get('roleKo')}; "
+             f"appearanceKo={character.get('appearanceKo')}; appearanceEn={character.get('appearanceEn')}")
     content = [{"image": {"format": "jpeg", "source": {"bytes": image_jpeg}}}, {"text": sheet}]
     data, usage, _ = _converse(APPEARANCE_SYSTEM, content, EMIT_APPEARANCE, 500, "claude.appearance")
     usd = usd_for(usage)
     line = (data.get("appearanceShortEn") or "").strip()
-    violations = compose.check_text("appearanceShortEn", line, [character])
+    violations = compose.check_text("appearanceShortEn", line, [character]) + compose.check_must_keep(line, character)
     if violations:
         content2 = content + [{"text": "위반을 고쳐라: " + "; ".join(violations)}]
         data, usage2, _ = _converse(APPEARANCE_SYSTEM, content2, EMIT_APPEARANCE, 500, "claude.appearance.retry")
         usd += usd_for(usage2)
         line = (data.get("appearanceShortEn") or "").strip()
-        violations = compose.check_text("appearanceShortEn", line, [character])
+        violations = compose.check_text("appearanceShortEn", line, [character]) + compose.check_must_keep(line, character)
     return line, usd, violations
 
 
 def b64(data: bytes) -> str:
     return base64.b64encode(data).decode("ascii")
+
+
+REVISE_CHARACTER_SYSTEM = """You update one character sheet for an image and video prompt from the user's Korean note.
+Apply the note literally (e.g. "더 까맣게" -> make the fur pure black; "털을 더 짧게" -> shorter fur).
+Keep everything the note does not change. Rewrite appearanceEn so it STARTS with the must-keep traits and
+the species, 25-40 words, plain English, no names, no negation words. Add any new visual trait the user
+states in the note to mustKeepEn (literal short English phrases); keep the old mustKeepEn entries unless
+the note explicitly contradicts them (then replace them).
+Always answer by calling the tool emit_character."""
+
+EMIT_CHARACTER = {
+    "name": "emit_character",
+    "description": "Return the revised appearance fields.",
+    "inputSchema": {"json": {"type": "object", "required": ["appearanceEn", "mustKeepEn", "appearanceKo"],
+                             "properties": {"appearanceEn": _s("25-40 words"),
+                                            "mustKeepEn": {"type": "array", "items": _STR},
+                                            "appearanceKo": _s("Korean appearance summary")}}},
+}
+
+
+def revise_character(character: dict[str, Any], feedback_ko: str) -> tuple[dict[str, Any], float]:
+    """사용자 의견(한국어)으로 캐릭터 영어 외형을 고친다. (고친 캐릭터, 비용 USD)."""
+    sheet = json.dumps({k: character.get(k) for k in ("kind", "speciesEn", "mustKeepEn", "appearanceKo",
+                                                        "appearanceEn")}, ensure_ascii=False)
+    content = [{"text": f"character sheet: {sheet}\n사용자 의견: {feedback_ko}"}]
+    data, usage, _ = _converse(REVISE_CHARACTER_SYSTEM, content, EMIT_CHARACTER, 800, "claude.revise_character")
+    usd = usd_for(usage)
+    updated = dict(character)
+    for k in ("appearanceEn", "mustKeepEn", "appearanceKo"):
+        if data.get(k):
+            updated[k] = data[k]
+    problems = compose.check_text("appearanceEn", updated["appearanceEn"], [character]) + \
+        compose.check_must_keep(updated["appearanceEn"], updated)
+    if problems:
+        retry = content + [{"text": "위반을 고쳐라: " + "; ".join(problems)}]
+        data, usage2, _ = _converse(REVISE_CHARACTER_SYSTEM, retry, EMIT_CHARACTER, 800, "claude.revise_character.retry")
+        usd += usd_for(usage2)
+        for k in ("appearanceEn", "mustKeepEn", "appearanceKo"):
+            if data.get(k):
+                updated[k] = data[k]
+    return updated, usd

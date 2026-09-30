@@ -33,6 +33,7 @@ def interpret(command: str, user_characters: list[dict[str, Any]]) -> tuple[dict
         chars.append({
             "id": f"c{i}", "nameKo": c.get("name") or f"인물 {i}", "nameEn": None,
             "roleKo": "주인공" if i == 1 else "상대역",
+            "kind": "human", "speciesEn": "person", "mustKeepEn": [],
             "appearanceKo": c.get("description") or "짧은 검은 머리, 단순한 재킷",
             "appearanceEn": "A person with short dark hair wearing a simple navy jacket and white sneakers",
             "handleEn": handles[i - 1],
@@ -65,6 +66,12 @@ def interpret(command: str, user_characters: list[dict[str, Any]]) -> tuple[dict
         "elements": elements, "characters": chars, "shots": shots,
     }
     return data, 0.0, compose.check_interpretation(data)
+
+
+def revise_character(character: dict[str, Any], feedback_ko: str) -> tuple[dict[str, Any], float]:
+    updated = dict(character)
+    updated["appearanceKo"] = f"{character.get('appearanceKo', '')} ({feedback_ko})"
+    return updated, 0.0
 
 
 def appearance_from_image(image_jpeg: bytes, character: dict[str, Any]) -> tuple[str, float, list[str]]:
