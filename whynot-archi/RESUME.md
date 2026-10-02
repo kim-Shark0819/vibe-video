@@ -45,8 +45,8 @@
 
 | # | 항목 | 누가 |
 |---|---|---|
-| 0 | 와이낫 계정 dev 구축(Kiro 이관 파일럿, `docs/kiro-instruction-2026-10-02.md` §5) | Kiro |
-| 1 | dev 테스트: 메인에서 로그인한 **같은 탭**에서 와이낫 계정 dev 의 `/vpoc2.html` → ①~⑤ → 리뷰 (예전 주소 `dev-whynot.meta-clouds.com` 은 통합계정이라 쓰지 않는다) | 설계자 |
+| 0 | 와이낫 계정 dev 구축(Kiro 이관 1단계 파일럿 — dev 만, 운영 그대로. `docs/kiro-command-dev-only.md`) | Kiro |
+| 1 | dev 테스트: 메인에서 로그인한 **같은 탭**에서 `https://dev.whynot.meta-clouds.com/vpoc2.html` → ①~⑤ → 리뷰 (예전 주소 `dev-whynot.meta-clouds.com` 은 통합계정이라 쓰지 않는다) | 설계자 |
 | 2 | 오류가 나면 화면의 오류 원문(where · type · message · requestId) 전달 | 설계자 |
 
 ## 다음 단계

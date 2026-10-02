@@ -11,7 +11,8 @@
 >
 > - 통합계정(`730335451955`)에 AI POC 과금 0. AI POC 개발 환경·개발 도구(GitLab·Runner·ArgoCD·ECR·배스천)·모델 호출을 각 고객사 계정으로 옮긴다. 고객사 계정 비용은 늘어도 된다.
 > - **통합계정 신규 생성 중지**(§5 금지 F-1). 0/0 인 앱도 다시 켜지 않는다. 이 문서의 허브 개발계 계획(§1 개발계 호스트, §3.2 진행 순서, §3.5 와이랩 개발계)은 이 방침에 맞춰 멈췄다.
-> - Kiro 지시: `docs/kiro-instruction-2026-10-02.md` · 검토: `docs/dev-migration-review.md`
+> - **1단계 = dev 만 이관, 운영은 그대로**(운영 EKS·운영 앱·운영 배포 경로 무변경). 운영 연결과 통합계정 공용 자원 정리는 다음 단계(별도 지시). 어느 쪽인지 모르는 자원은 운영으로 본다.
+> - Kiro 명령: `docs/kiro-command-dev-only.md` · 지시: `docs/kiro-instruction-2026-10-02.md` · 검토: `docs/dev-migration-review.md`
 
 **최우선 목표: 이매지너스 운영(`https://imaginus.meta-clouds.com`)에서 스토리 개발 기능을 쓸 수 있게 한다. 화면은 현재 운영 UI 그대로.**
 
@@ -196,7 +197,7 @@ POC 기준. **비용 상한을 미리 두지 않는다.** 실측하고 나중에
 
 ### 금지
 
-- **F-1 통합계정(`730335451955`) AI POC 신규 생성** (2026-10-02 설계자 지시). EKS·노드그룹·Neptune·ALB·리스너 규칙·Ingress 호스트·ECR 저장소·S3 버킷·IAM 역할/정책·네임스페이스·Route53 레코드·ACM 인증서·Secrets Manager·EC2 전부. 모듈형 플랫폼 작업 포함. 0/0 인 앱 재기동과 통합계정 모델 실호출(실호출 점검 스크립트 포함)도 금지. ns `ylab`·`ylab-graph` 는 동결(끄지도 지우지도 않음). 해제 조건: 설계자 지시뿐
+- **F-1 통합계정(`730335451955`) AI POC 신규 생성** (2026-10-02 설계자 지시). EKS·노드그룹·Neptune·ALB·리스너 규칙·Ingress 호스트·ECR 저장소·S3 버킷·IAM 역할/정책·네임스페이스·Route53 레코드·ACM 인증서·Secrets Manager·EC2 전부. 모듈형 플랫폼 작업 포함. 0/0 인 앱 재기동과 통합계정 모델 실호출(실호출 점검 스크립트 포함)도 금지. ns `ylab`·`ylab-graph` 는 동결(끄지도 지우지도 않음). 예외 E-1: `meta-clouds.com` 존에 `dev.<고객>.meta-clouds.com` NS 위임 레코드 고객당 1건(추가만, 설계자 10-02 승인). 해제 조건: 설계자 지시뿐
 - 자격증명·시크릿 값 출력·기록·커밋
 - `glab ci run`(수동 파이프라인) — `rules.changes` 가 전부 참이 되어 레거시 고객 배포가 켜진 사고가 있었다. 레거시 잡은 이제 `$CI_PIPELINE_SOURCE == "push"` 또는 `FORCE_DEPLOY_TENANT=<고객>` 일 때만 뜬다
 - 쉘 문자열 치환으로 소스 수정(`f`→`r` 전역 치환 사고). 편집은 정확한 문자열 치환 도구로
@@ -209,7 +210,7 @@ POC 기준. **비용 상한을 미리 두지 않는다.** 실측하고 나중에
 예전 가드레일("STS 외 호출 금지, 프로필 만들지 않음")은 폐지했다. 원래 이유는 코드 병합 작업 때 그 계정 자격증명과 그 계정용 Terraform 이 한 폴더에 있어 잘못 apply 하는 것을 막는 것이었다. 그 작업이 끝난 뒤에도 남아 운영 확인을 막았고, "레거시 없음" 오판(§7)을 낳았다.
 
 - IM-1 **읽기 전면 허용**(AWS 조회·공개 HTTP). 읽기는 읽기 전용 역할(`agent-readonly`, 프로필 `imaginus-prod-ro`)로 한다. S3 객체 내용·Secret 값·tfstate 는 읽지 않는다
-- IM-2 기존 `story-ai-*`(EKS·ALB·Neptune·IAM·ECR·S3) 쓰기 금지. 예외: 읽기 전용 역할과 `story-ai-eks` 읽기 전용 access entry 각 1건(설계자 10-02 승인). `imaginus.meta-clouds.com` 레코드 변경 금지. 운영 배포는 설계자 `deploy.ps1`(워크스페이스 `이매지너스/`)
+- IM-2 기존 `story-ai-*`(EKS·ALB·Neptune·IAM·ECR·S3) 쓰기 금지. 예외: 새로 만드는 읽기 전용 역할 1건(설계자 10-02 승인). `story-ai-eks` 읽기 전용 access entry 는 운영 클러스터 변경이라 1단계에서 하지 않는다(지시 §10 N-6). `imaginus.meta-clouds.com` 레코드 변경 금지. 운영 배포는 설계자 `deploy.ps1`(워크스페이스 `이매지너스/`)
 - IM-3 `이매지너스/terraform_infra/` 의 tfstate 를 열지 않고 그 폴더에서 terraform 명령을 실행하지 않는다
 - IM-4 이 계정에 쓰는 명령 직전 `sts get-caller-identity` 결과와 대상 이름(`story-ai-*` 아님)을 확인한다. 다르면 멈춘다
 
@@ -266,7 +267,8 @@ POC 기준. **비용 상한을 미리 두지 않는다.** 실측하고 나중에
 
 | 문서 | 경로 |
 |---|---|
-| **개발 이관 Kiro 지시 (2026-10-02)** | `docs/kiro-instruction-2026-10-02.md` (vibe-video) |
+| **개발 이관 Kiro 명령 — 1단계 dev 만** | `docs/kiro-command-dev-only.md` (vibe-video) |
+| 개발 이관 Kiro 지시 (2026-10-02 개정 2) | `docs/kiro-instruction-2026-10-02.md` (vibe-video) |
 | 개발 이관 지시 해석 검토 | `docs/dev-migration-review.md` (vibe-video) |
 | 계정 번호 검사 | `tools/check_accounts.py` (vibe-video) |
 | 모듈화 지시서 | `platform/docs/kiro-7steps.md` |
