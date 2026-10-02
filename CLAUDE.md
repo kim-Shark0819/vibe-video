@@ -7,6 +7,12 @@
 
 ## 0. 지금 가장 먼저 할 일
 
+> **2026-10-02 설계자 방침 — 아래 모든 항목보다 우선한다**
+>
+> - 통합계정(`730335451955`)에 AI POC 과금 0. AI POC 개발 환경·개발 도구(GitLab·Runner·ArgoCD·ECR·배스천)·모델 호출을 각 고객사 계정으로 옮긴다. 고객사 계정 비용은 늘어도 된다.
+> - **통합계정 신규 생성 중지**(§5 금지 F-1). 0/0 인 앱도 다시 켜지 않는다. 이 문서의 허브 개발계 계획(§1 개발계 호스트, §3.2 진행 순서, §3.5 와이랩 개발계)은 이 방침에 맞춰 멈췄다.
+> - Kiro 지시: `docs/kiro-instruction-2026-10-02.md` · 검토: `docs/dev-migration-review.md`
+
 **최우선 목표: 이매지너스 운영(`https://imaginus.meta-clouds.com`)에서 스토리 개발 기능을 쓸 수 있게 한다. 화면은 현재 운영 UI 그대로.**
 
 현재 판단 (2026-09-28 Kiro 2단계 결과):
@@ -33,12 +39,15 @@
 | 구분 | 계정 | 주소 / 비고 |
 |---|---|---|
 | 허브(통합 개발) | `730335451955` | 공용 EKS `AI-POC-eks`(엔드포인트 비공개), 공용 ALB `platform-dev-alb`, 프로파일 `ai-poc-hub` |
-| **이매지너스 운영** | `726990466389` (story-ai) | `imaginus.meta-clouds.com`, ALB `story-ai-758721242`, 이미지 `20260908-v73`, **배스천 빌드 배포**(GitLab CI 아님). 프로파일 `imaginus-prod` 은 아직 로컬에 없음 |
-| 키이스트 운영 | `722500516860` | **빈 계정**(기본 VPC 까지 삭제됨). 프로파일 `keyeast-prod`, `keyeast-prod-deploy` |
-| 와이낫 운영 | `089540175779` | `whynot.meta-clouds.com`(목표) |
-| 와이랩 운영 | `892278727066` | 프로파일 `ylab` |
+| **이매지너스 운영** | `726990466389` (story-ai) | `imaginus.meta-clouds.com`, ALB `story-ai-758721242`, **배스천 빌드 배포**(GitLab CI 아님, 설계자 `deploy.ps1`, 9-30 v89). 프로파일 `imaginus-prod`(10-02 Kiro 사용), 읽기 전용 `imaginus-prod-ro` 예정. **읽기 전면 허용 · 기존 `story-ai-*` 쓰기 금지**(§5 이매지너스 규칙) |
+| 키이스트 운영 | `722500516860` | 9-30 부터 운영 중(`keyeast-prod-eks`, `keyeast.meta-clouds.com`). 프로파일 `keyeast-prod`, `keyeast-prod-deploy` |
+| 와이낫 운영 | `089540175779` | `whynot.meta-clouds.com`, `whynot-prod-eks`. 프로파일 `whynot-prod`(10-02 Kiro 사용) |
+| 와이랩 운영 | `892278727066` | `ylab-prod-eks`(배포는 CodeBuild). 프로파일 `ylab` |
 
-로컬 AWS 프로파일: `default · rosa-maker · mtp_ksb · ai-poc-hub · ylab · keyeast-prod · keyeast-prod-deploy · goodrich-mgmt`.
+**이 표가 계정 대장(정본)이다.** 계정 번호는 여기서만 복사하고 `python tools/check_accounts.py` 로 검사한다. 표를 바꾸면 그 체커의 `ACCOUNTS` 도 바꾼다.
+(사고: `PRD_modular-platform.md` §4.2 에 이매지너스 계정을 와이랩 번호 `892278727066` 으로 적었다 — 10-02 정정 지시)
+
+로컬 AWS 프로파일: `default · rosa-maker · mtp_ksb · ai-poc-hub · ylab · keyeast-prod · keyeast-prod-deploy · goodrich-mgmt` + 10-02 Kiro 사용 확인 `whynot-prod · imaginus-prod`.
 **계정 혼용 금지.** 명령 전 `aws sts get-caller-identity --profile <p>` 로 계정을 확인하고 다르면 멈춘다.
 
 ### 개발계 호스트 (허브)
@@ -47,9 +56,11 @@
 |---|---|---|
 | `ai-poc-web.meta-clouds.com` | AI-POC 레거시 앱 | `ci-def69090`, 무변경 유지 |
 | `next-ai-poc.meta-clouds.com` | **새 모듈 플랫폼**(셸 + story 모듈)을 ai-poc 개발계 데이터 위에 올린 검증용 | 운영 UI 와 다르다. 운영의 새 버전이 아니다 |
-| `keyeast.meta-clouds.com` | 키이스트 레거시 개발계 | 스토리 개발 7단계 + personalization 원본 |
-| `dev-whynot.meta-clouds.com` | 와이낫 개발계 | 장면 영상화 |
-| `dev-imaginus.meta-clouds.com` | DNS 는 `platform-dev-alb` 를 가리킴, 아직 규칙 없음(404) | §0 3번에서 **운영과 같은 앱**용으로 쓴다 |
+| `dev-keyeast.meta-clouds.com` | 키이스트 개발계 (9-30 이전 이름 `keyeast.meta-clouds.com` 은 이제 **키이스트 운영**) | 스토리 개발 7단계 + personalization 원본. 10-02 0/0 |
+| `dev-whynot.meta-clouds.com` | 와이낫 개발계 | 장면 영상화 · vpoc2. 10-02 0/0 · 503 |
+| `dev-imaginus.meta-clouds.com` | DNS 는 `platform-dev-alb` 를 가리킴, 규칙 없음(404) | F-1 로 쓰지 않는다. 이매지너스 dev 는 이매지너스 계정에 만든다 |
+
+**2026-10-02 F-1:** 이 표의 호스트는 모두 통합계정 자원이다. 새 호스트를 여기에 만들지 않고, 고객사 계정으로 옮기거나 지운다. 10-02 Kiro 실측: ns `ylab`(2/2, 동결) 외 전부 0/0.
 
 ---
 
@@ -93,6 +104,7 @@
 | 7 운영계 전환·정리 | 대기 |
 
 진행 중 순서(순서 A, 이매지너스 제외 후): 키이스트 개발계 이관 → legacy 모듈(L-2~L-5) → 와이랩 → 5단계 → 와이낫 → 7단계.
+**2026-10-02 중지(F-1).** 이 순서는 통합계정에 개발계를 세우는 일이라 멈춘다. 플랫폼 검증은 파일럿 고객사(와이낫) dev 에서 한다(Kiro 지시 D-A4).
 
 주요 사실:
 
@@ -108,7 +120,7 @@
 | ID | 결정 |
 |---|---|
 | D-T01 | Neptune 은 고객별 전용 클러스터(합치지 않는다). 이유: `deduplicate_users` 가 기동마다 username 으로 병합, 관리자가 모두 `admin` |
-| D-T02 | 개발계 ALB 하나 공유(IngressGroup + 호스트 규칙 + order 대역) |
+| D-T02 | 개발계 ALB 하나 공유(IngressGroup + 호스트 규칙 + order 대역) — **2026-10-02 폐기(F-1).** 개발계는 고객사 계정마다 |
 | D-T03 | 호스트 `dev-<고객사>` |
 | D-T04 | 기존 개발계는 두고 `next-` 로 검증 후 DNS 교체 |
 | D-T05 | 네임스페이스는 테넌트 선언 `manageNamespace` → 그 테넌트 Application 에만 `CreateNamespace=true` (공용 ApplicationSet 동작 불변) |
@@ -136,7 +148,7 @@
 
 ### 3.5 와이랩
 
-- 개발계 신설 승인됨(G6b, 비용은 이매지너스와 같은 구성으로 본다).
+- 개발계 신설 승인됨(G6b, 비용은 이매지너스와 같은 구성으로 본다) → 통합계정에 생성됨(10-01, ns `ylab` · Neptune `ylab-graph`). **10-02 F-1 로 동결.** 와이랩 dev 는 와이랩 계정에 새로 만든다.
 - 새 기능 요청: 인풋 A(웹툰 원작)·B(소재·로그라인)·C(트리트먼트)·D(대본 1화)별로 AI 가 할 일을 다르게 하고 산출물을 여러 갈래로 제공. 입력 유형 판정은 기존 기능 재사용(새로 만들지 않음).
 - **미결정 — 사용자 선택**: (1) 5단계까지 기다려 전체 이관 / (2) story 모듈을 와이랩에 추가로 켜서 각색·트리트먼트·대본·후속을 먼저 제공(콘티는 5단계). 판정 코드가 legacy 에 있어 (2) 도 legacy 모듈 선행.
 - 조사 문서: `platform/docs/ylab-input-branch-research.md` (D-Y01~08). 확인된 공백: C 인풋에 허용 kind 없음, D 는 treatment 만 생성(주석과 구현 불일치).
@@ -167,11 +179,11 @@ POC 기준. **비용 상한을 미리 두지 않는다.** 실측하고 나중에
 
 ### 승인 없이 해도 되는 것
 
-- 허브 개발계 배포(push 파이프라인 + manual 잡)
-- 읽기 전용 조회(모든 계정)
+- 허브 개발계 배포: 이미 있는 앱의 코드 갱신만(push 파이프라인, 0/0 인 앱은 0/0 그대로). 새 테넌트·호스트를 여는 배포와 모듈 manual 배포 잡은 F-1 로 금지
+- 읽기 전용 조회(모든 계정 — 이매지너스 포함. 계정 단위 조회 금지는 두지 않는다, R-1)
 - 저장소 안 코드·문서·체커 변경, 커밋, 브랜치 push, MR 병합(CI green 확인 후)
-- 새로 만드는 IRSA 역할·정책·SA·Secret (기존 것 수정은 불가). 병행 이관 시 `TOKEN_SECRET` 은 그 고객 레거시 값 복사, 신규·운영은 새로 생성
-- 키이스트 운영 계정(빈 계정) 안 생성
+- 새로 만드는 IRSA 역할·정책·SA·Secret — **고객사 계정 안에서만**(통합계정은 F-1). 기존 것 수정은 불가. 병행 이관 시 `TOKEN_SECRET` 은 그 고객 레거시 값 복사, 신규·운영은 새로 생성
+- 고객사 계정 안 dev 자원 신규 생성(이관 작업, Kiro 지시 §3). 기존 운영 자원 수정은 승인 필요
 
 ### 승인이 필요한 것 (닿으면 그 항목만 건너뛰고 나머지는 계속)
 
@@ -184,12 +196,30 @@ POC 기준. **비용 상한을 미리 두지 않는다.** 실측하고 나중에
 
 ### 금지
 
+- **F-1 통합계정(`730335451955`) AI POC 신규 생성** (2026-10-02 설계자 지시). EKS·노드그룹·Neptune·ALB·리스너 규칙·Ingress 호스트·ECR 저장소·S3 버킷·IAM 역할/정책·네임스페이스·Route53 레코드·ACM 인증서·Secrets Manager·EC2 전부. 모듈형 플랫폼 작업 포함. 0/0 인 앱 재기동과 통합계정 모델 실호출(실호출 점검 스크립트 포함)도 금지. ns `ylab`·`ylab-graph` 는 동결(끄지도 지우지도 않음). 해제 조건: 설계자 지시뿐
 - 자격증명·시크릿 값 출력·기록·커밋
 - `glab ci run`(수동 파이프라인) — `rules.changes` 가 전부 참이 되어 레거시 고객 배포가 켜진 사고가 있었다. 레거시 잡은 이제 `$CI_PIPELINE_SOURCE == "push"` 또는 `FORCE_DEPLOY_TENANT=<고객>` 일 때만 뜬다
 - 쉘 문자열 치환으로 소스 수정(`f`→`r` 전역 치환 사고). 편집은 정확한 문자열 치환 도구로
 - 체커 약화(범위 축소·단정 완화). 실패하면 코드를 고친다
 - 공용 플랫폼 파일(`PLATFORM_FILES.txt`) 직접 수정 — 필요하면 어댑터·재수출로 우회
 - 강제 push·reset·rebase
+
+### 이매지너스 계정 (`726990466389`) — 2026-10-02 개정
+
+예전 가드레일("STS 외 호출 금지, 프로필 만들지 않음")은 폐지했다. 원래 이유는 코드 병합 작업 때 그 계정 자격증명과 그 계정용 Terraform 이 한 폴더에 있어 잘못 apply 하는 것을 막는 것이었다. 그 작업이 끝난 뒤에도 남아 운영 확인을 막았고, "레거시 없음" 오판(§7)을 낳았다.
+
+- IM-1 **읽기 전면 허용**(AWS 조회·공개 HTTP). 읽기는 읽기 전용 역할(`agent-readonly`, 프로필 `imaginus-prod-ro`)로 한다. S3 객체 내용·Secret 값·tfstate 는 읽지 않는다
+- IM-2 기존 `story-ai-*`(EKS·ALB·Neptune·IAM·ECR·S3) 쓰기 금지. 예외: 읽기 전용 역할과 `story-ai-eks` 읽기 전용 access entry 각 1건(설계자 10-02 승인). `imaginus.meta-clouds.com` 레코드 변경 금지. 운영 배포는 설계자 `deploy.ps1`(워크스페이스 `이매지너스/`)
+- IM-3 `이매지너스/terraform_infra/` 의 tfstate 를 열지 않고 그 폴더에서 terraform 명령을 실행하지 않는다
+- IM-4 이 계정에 쓰는 명령 직전 `sts get-caller-identity` 결과와 대상 이름(`story-ai-*` 아님)을 확인한다. 다르면 멈춘다
+
+### 규칙을 만들 때 — 가드레일 부작용 방지 (2026-10-02)
+
+- R-1 계정 단위 "호출 금지"를 두지 않는다. 막을 것은 쓰기를 자원·동작 단위로 적는다. 운영 계정은 모두 읽기 허용
+- R-2 금지 규칙에는 이유·범위·해제 조건을 함께 적는다. 이유가 된 작업이 끝나면 그 완료 보고에 "이 규칙 해제 여부"를 넣는다
+- R-3 볼 수 없는 계정·호스트·저장소가 있으면 그 대상에 대해 "없다·같다·안 쓴다" 같은 결론을 내리지 않는다. "확인 필요 — 접근 불가(이유)"로 쓰고 접근을 요청한다
+- R-4 고객에 대해 판단하기 전에 그 고객의 운영 계정·운영 호스트를 먼저 조회한다
+- R-5 계정 번호는 §1 계정 대장에서만 복사한다. 새로 적은 번호는 sts 결과로 대조하고 `tools/check_accounts.py` 를 통과시킨다
 
 ---
 
@@ -225,7 +255,9 @@ POC 기준. **비용 상한을 미리 두지 않는다.** 실측하고 나중에
 | 셸·core-api 태그 스큐 | 함께 빌드, 폴백은 모든 저장소에 있는 태그 |
 | ECR 불변 태그 충돌 | 태그 존재 시 빌드 skip(probe) |
 | 줄 끝 공백으로 `git diff --check` 실패 | 저장 전 공백·BOM 제거 |
-| "이매지너스는 레거시 없음" 오판 | 허브만 보고 운영 계정을 빠뜨림. **고객 판단 전에 운영 계정·운영 호스트부터 확인** |
+| "이매지너스는 레거시 없음" 오판 | 허브만 보고 운영 계정을 빠뜨림. **고객 판단 전에 운영 계정·운영 호스트부터 확인.** 원인은 이유가 끝난 뒤에도 남은 이매지너스 계정 "호출 금지" 가드레일 → 폐지, R-1~R-4 (2026-10-02) |
+| PRD 에 이매지너스 계정을 와이랩 번호(`892278727066`)로 기재 | 계정 번호는 §1 계정 대장에서만 복사, `tools/check_accounts.py` 가 고객 이름과 번호의 짝을 검사(R-5) |
+| 개발 이관 지시를 "운영 무접촉"으로 읽어 통합계정에 GitLab·ArgoCD·ECR 을 남기는 설계가 나옴 | 지시에 목적(통합계정 과금 0)을 먼저 쓴다. "그대로 둔다"는 재생성 금지인지 설정 변경 금지인지 구분해 쓴다 |
 | 명령문 자리표시자(`<…>`)가 채워지지 않은 채 전달 | 사용자 입력이 필요한 칸은 두지 말고 "대기"로 명시 |
 
 ---
@@ -234,6 +266,9 @@ POC 기준. **비용 상한을 미리 두지 않는다.** 실측하고 나중에
 
 | 문서 | 경로 |
 |---|---|
+| **개발 이관 Kiro 지시 (2026-10-02)** | `docs/kiro-instruction-2026-10-02.md` (vibe-video) |
+| 개발 이관 지시 해석 검토 | `docs/dev-migration-review.md` (vibe-video) |
+| 계정 번호 검사 | `tools/check_accounts.py` (vibe-video) |
 | 모듈화 지시서 | `platform/docs/kiro-7steps.md` |
 | 재개 지점·무인 진행 기록 | `platform/docs/unattended-log.md` |
 | 이매지너스 운영 소스·대조 | `platform/docs/imaginus-prod-source.md` |

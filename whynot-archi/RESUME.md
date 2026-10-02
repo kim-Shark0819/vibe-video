@@ -38,14 +38,15 @@
 
 - 방침: **통합계정(730335451955)에 AI POC 과금 0.** 개발을 각 고객사 계정으로 옮긴다(Kiro 진행, 결정 대기). 검토 문서 `docs/dev-migration-review.md`
 - Kiro 실측(10-02): ns `whynot` 0/0, `dev-whynot.meta-clouds.com/api/health` 503. 9-30 이후 누가 내렸는지는 확인 필요
-- dev-whynot 에서 테스트하면 모델 호출(Luma Ray2 · SD3.5 · Claude)이 통합계정에 과금된다 → 아래 1번은 테스트 위치가 정해질 때까지 대기
+- dev-whynot 에서 테스트하면 모델 호출(Luma Ray2 · SD3.5 · Claude)이 통합계정에 과금된다
+- **결정(10-02, 지시 D-G):** vpoc2 테스트는 와이낫 계정 dev(이관 파일럿)에서 한다. 통합계정 dev-whynot 은 다시 켜지 않는다(F-1 신규 생성 중지). 아래 1번은 와이낫 계정 dev 가 생기면 주소만 바꿔 진행
 
 ## 대기 중
 
 | # | 항목 | 누가 |
 |---|---|---|
-| 0 | vpoc2 테스트 위치 결정: 와이낫 계정 dev 가 생길 때까지 미룸 / 예외로 통합계정 dev-whynot 재기동 | 설계자 |
-| 1 | dev 테스트: 메인에서 로그인한 **같은 탭**에서 `https://dev-whynot.meta-clouds.com/vpoc2.html` → ①~⑤ → 리뷰 | 설계자 |
+| 0 | 와이낫 계정 dev 구축(Kiro 이관 파일럿, `docs/kiro-instruction-2026-10-02.md` §5) | Kiro |
+| 1 | dev 테스트: 메인에서 로그인한 **같은 탭**에서 와이낫 계정 dev 의 `/vpoc2.html` → ①~⑤ → 리뷰 (예전 주소 `dev-whynot.meta-clouds.com` 은 통합계정이라 쓰지 않는다) | 설계자 |
 | 2 | 오류가 나면 화면의 오류 원문(where · type · message · requestId) 전달 | 설계자 |
 
 ## 다음 단계
