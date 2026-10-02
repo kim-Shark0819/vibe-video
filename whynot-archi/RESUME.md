@@ -34,10 +34,17 @@
 - 실제 AWS 모델 호출은 아직 한 번도 안 됐다 — 설계자 첫 테스트가 첫 호출이다
 - 이 저장소 코드 = GitLab main 의 `AI-POC-whynot/app/src/vpoc2/` · `frontend/public/vpoc2.*`
 
+## 2026-10-02 변경 — dev 테스트가 막혔다
+
+- 방침: **통합계정(730335451955)에 AI POC 과금 0.** 개발을 각 고객사 계정으로 옮긴다(Kiro 진행, 결정 대기). 검토 문서 `docs/dev-migration-review.md`
+- Kiro 실측(10-02): ns `whynot` 0/0, `dev-whynot.meta-clouds.com/api/health` 503. 9-30 이후 누가 내렸는지는 확인 필요
+- dev-whynot 에서 테스트하면 모델 호출(Luma Ray2 · SD3.5 · Claude)이 통합계정에 과금된다 → 아래 1번은 테스트 위치가 정해질 때까지 대기
+
 ## 대기 중
 
 | # | 항목 | 누가 |
 |---|---|---|
+| 0 | vpoc2 테스트 위치 결정: 와이낫 계정 dev 가 생길 때까지 미룸 / 예외로 통합계정 dev-whynot 재기동 | 설계자 |
 | 1 | dev 테스트: 메인에서 로그인한 **같은 탭**에서 `https://dev-whynot.meta-clouds.com/vpoc2.html` → ①~⑤ → 리뷰 | 설계자 |
 | 2 | 오류가 나면 화면의 오류 원문(where · type · message · requestId) 전달 | 설계자 |
 
